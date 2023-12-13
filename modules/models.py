@@ -17,9 +17,10 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
     BitsAndBytesConfig,
-    GPTQConfig
+    GPTQConfig,
+    TextStreamer
 )
-
+import intel_extension_for_transformers.transformers as itrans
 import modules.shared as shared
 from modules import RoPE, llama_attn_hijack, sampler_hijack
 from modules.logging_colors import logger
@@ -73,6 +74,7 @@ def load_model(model_name, loader=None):
         'ctransformers': ctransformers_loader,
         'AutoAWQ': AutoAWQ_loader,
         'QuIP#': QuipSharp_loader,
+        'IntelTransformer': intel_loader,
     }
 
     metadata = get_model_metadata(model_name)
@@ -239,6 +241,13 @@ def huggingface_loader(model_name):
         model = LoaderClass.from_pretrained(path_to_model, **params)
 
     return model
+
+def intel_loader(model_name):
+    woq_config = itrans.WeightOnlyQuantConfig(compute_dtype="int8", weight_dtype="int4")
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    streamer = TextStreamer(tokenizer)
+    model = itrans.AutoModelForCausalLM.from_pretrained(model_name, quantization_config=woq_config, trust_remote_code=True)
+    return model, tokenizer
 
 
 def llamacpp_loader(model_name):
